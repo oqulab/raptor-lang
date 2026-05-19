@@ -32,11 +32,12 @@ dependencies {
 ### Usage
 
 ```kotlin
-import kz.oqulab.raptor.*
+import kz.oqulab.raptor.ECLexer
+import kz.oqulab.raptor.ECParser
+import kz.oqulab.raptor.ExecutionContext
 
-// Source code
-val source = """
-class MainRn {
+suspend fun main() {
+    val source = """
     fun main() {
         val greeting = "Hello from Raptor!"
         println(greeting)
@@ -45,24 +46,55 @@ class MainRn {
             println("Count: " + i)
         }
     }
+    """
+
+    // 1. Lexical Analysis (Tokenization)
+    val tokens = ECLexer(source).lex()
+
+    // 2. Parsing (AST Generation)
+    val parser = ECParser()
+    val classes = parser.parse(tokens)
+
+    // 3. Execution Context Setup
+    val context = ExecutionContext(
+        log = { json, newLine -> println(json) },
+        readInput = { readln() }
+    )
+    context.classes = classes
+
+    // 4. Run the Interpreter
+    val (output, executionTimeMs) = context.run()
+
+    println("Execution Result: $output")
+    println("Time Taken: $executionTimeMs ms")
 }
-"""
-
-// Lex
-val tokens = ECLexer(source).lex()
-
-// Parse
-val parser = ECParser()
-val classes = parser.parse(tokens)
-
-// Execute
-val context = ExecutionContext(
-    log = { json, newLine -> println(json) },
-    readInput = { readln() }
-)
-context.classes = classes
-context.run()
 ```
+
+### Execution Output & Return Value
+
+The `context.run()` method is a `suspend` function that automatically resets the internal state after execution and returns a `Pair<List<JsonElement>, Long>`, where:
+
+* **`first`**: A list of `JsonElement` representing the captured output log.
+* **`second`**: The total execution time in milliseconds.
+
+For the example code above, the returned `Pair` will look like this:
+```JSON
+{
+  "first": [
+    "Hello from Raptor!\n",
+    "Count: 1",
+    "Count: 2",
+    "Count: 3",
+    "Count: 4",
+    "Count: 5"
+  ],
+  "second": 2
+}
+```
+
+For the example above, the returned Pair will look like this:
+
+result will be Pair<List<JsonElement>, Long>
 
 ### REPL Mode
 
