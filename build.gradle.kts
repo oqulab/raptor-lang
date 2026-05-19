@@ -1,3 +1,5 @@
+import java.security.MessageDigest
+
 plugins {
     id("java-library")
     kotlin("jvm") version "2.1.0"
@@ -29,7 +31,7 @@ dependencies {
 
 publishing {
     publications {
-        create<MavenPublication>("release") {
+        create<MavenPublication>("maven") {
             from(components["java"])
 
             pom {
@@ -57,27 +59,57 @@ publishing {
             }
         }
     }
-
-    repositories {
-        maven {
-            name = "sonatypeCentral"
-            url = uri("https://central.sonatype.com/api/v1/publisher/deployments")
-            credentials {
-                username = project.findProperty("sonarCentralUsername") as String? ?: ""
-                password = project.findProperty("sonarCentralPassword") as String? ?: ""
-            }
-        }
-    }
 }
 
 signing {
-    val signingKey = project.findProperty("signing.key") as String?
-    val signingPassphrase = project.findProperty("signing.passphrase") as String?
+    val keyId = project.findProperty("signing.keyId") as String?
+    val password = project.findProperty("signing.password") as String?
+    val keyFile = project.findProperty("signing.secretKeyRingFile") as String?
 
-    // Если свойства заполнены, настраиваем ин-мемори подпись
-    if (!signingKey.isNullOrEmpty() && !signingPassphrase.isNullOrEmpty()) {
-        useInMemoryPgpKeys(signingKey, signingPassphrase)
+    if (keyId != null && password != null && keyFile != null) {
+        val file = file(keyFile)
+        if (file.exists() && file.readText().contains("BEGIN PGP PRIVATE KEY BLOCK")) {
+            useInMemoryPgpKeys(keyId, file.readText(), password)
+        }
     }
+    sign(publishing.publications["maven"])
+}
 
-    sign(publishing.publications["release"])
+// Задача для создания ZIP-архива для ручной загрузки в Central Portal
+tasks.register<Zip>("bundleRelease") {
+    dependsOn("publishMavenPublicationToMavenLocal")
+    
+    val groupDir = project.group.toString().replace(".", "/")
+    val artifactDir = project.name
+    val versionDir = project.version.toString()
+    
+    val repoRoot = File(System.getProperty("user.home"), ".m2/repository")
+    val inputDir = File(repoRoot, "$groupDir/$artifactDir/$versionDir")
+    
+    // Генерируем чексуммы перед упаковкой
+    doFirst {
+        inputDir.listFiles()?.forEach { file ->
+            if (file.isFile && !file.name.endsWith(".md5") && !file.name.endsWith(".sha1")) {
+                val bytes = file.readBytes()
+                
+                val md5 = MessageDigest.getInstance("MD5")
+                    .digest(bytes)
+                    .joinToString("") { "%02x".format(it) }
+                File(file.absolutePath + ".md5").writeText(md5)
+                
+                val sha1 = MessageDigest.getInstance("SHA-1")
+                    .digest(bytes)
+                    .joinToString("") { "%02x".format(it) }
+                File(file.absolutePath + ".sha1").writeText(sha1)
+            }
+        }
+    }
+    
+    // Сохраняем структуру папок в ZIP (важно для портала)
+    from(inputDir) {
+        into("$groupDir/$artifactDir/$versionDir")
+    }
+    
+    archiveFileName.set("raptor-lang-1.0.0.zip")
+    destinationDirectory.set(layout.buildDirectory.dir("distributions"))
 }
