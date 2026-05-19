@@ -82,11 +82,11 @@ For the example code above, the returned `Pair` will look like this:
 {
   "first": [
     "Hello from Raptor!\n",
-    "Count: 1",
-    "Count: 2",
-    "Count: 3",
-    "Count: 4",
-    "Count: 5"
+    "Count: 1\n",
+    "Count: 2\n",
+    "Count: 3\n",
+    "Count: 4\n",
+    "Count: 5\n"
   ],
   "second": 2
 }
