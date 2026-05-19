@@ -1,0 +1,31 @@
+// Raptorian Laina
+class Kitap() {
+    val atayi = "Өтірік өлең"
+    val avtory = "Мұқағали Мақатаев"
+
+    fun aqparattyBasypSigray() {
+        println("Кітап атауы: $atayi")
+        println("Авторы: $avtory")
+    }
+}
+
+fun main() {
+    val kitap = Kitap()
+    kitap.aqparattyBasypSigray()
+}
+
+// Raptorian Kazakh
+сынып Кітап() {
+    вал атауы = "Өтірік өлең"
+    вал авторы = "Мұқағали Мақатаев"
+
+    функция ақпараттыБасыпШығару() {
+        println("Кітап атауы: $атауы")
+        println("Авторы: $авторы")
+    }
+}
+
+функция басы() {
+    вал кітап = Кітап()
+    кітап.ақпараттыБасыпШығару()
+}

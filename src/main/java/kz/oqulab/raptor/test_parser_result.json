@@ -1,0 +1,227 @@
+{
+  "Agent": {
+    "name": "Agent",
+    "methods": {
+      "perceive": {
+        "name": "perceive",
+        "parameters": []
+      },
+      "act": {
+        "name": "act",
+        "parameters": []
+      },
+      "communicateWith": {
+        "name": "communicateWith",
+        "parameters": [
+          {
+            "name": "other",
+            "type": "Agent"
+          }
+        ]
+      }
+    },
+    "methods_call": [],
+    "member_variables": {}
+  },
+  "Robot": {
+    "name": "Robot",
+    "methods": {
+      "perceive": {
+        "name": "perceive",
+        "parameters": [],
+        "body": {
+          "statements": [
+            {
+              "type": "ecs.raptorian.IfNode",
+              "condition": {
+                "type": "ecs.raptorian.FunctionCallNode",
+                "name": "shouldStartNewTask",
+                "arguments": []
+              },
+              "thenBranch": {
+                "type": "ecs.raptorian.BlockStatementNode",
+                "statements": [
+                  {
+                    "type": "ecs.raptorian.AssignmentNode",
+                    "variable_name": "currentTask",
+                    "value": {
+                      "type": "ecs.raptorian.LiteralNode",
+                      "value": "перемещение предмета"
+                    }
+                  }
+                ]
+              },
+              "elseBranch": null
+            }
+          ]
+        }
+      },
+      "act": {
+        "name": "act",
+        "parameters": [],
+        "body": {}
+      },
+      "communicateWith": {
+        "name": "communicateWith",
+        "parameters": [
+          {
+            "name": "other",
+            "type": "Agent"
+          }
+        ],
+        "body": {
+          "statements": [
+            {
+              "type": "ecs.raptorian.IfNode",
+              "condition": {
+                "type": "ecs.raptorian.BinaryExpressionNode",
+                "left": {
+                  "type": "ecs.raptorian.VariableNode",
+                  "name": "other"
+                },
+                "operator": {
+                  "value": "is",
+                  "type": "is",
+                  "line": 17,
+                  "column": 399,
+                  "level": 3
+                },
+                "right": {
+                  "type": "ecs.raptorian.VariableNode",
+                  "name": "Robot"
+                }
+              },
+              "thenBranch": null,
+              "elseBranch": null
+            }
+          ]
+        }
+      },
+      "shouldStartNewTask": {
+        "name": "shouldStartNewTask",
+        "parameters": [],
+        "body": {
+          "statements": [
+            {
+              "type": "ecs.raptorian.ReturnNode",
+              "value": {
+                "type": "ecs.raptorian.LiteralNode",
+                "value": true
+              }
+            }
+          ]
+        },
+        "returnType": {
+          "operator": {
+            "value": "Boolean",
+            "type": "identifier",
+            "line": 19,
+            "column": 461,
+            "level": 2
+          }
+        }
+      }
+    },
+    "methods_call": [],
+    "member_variables": {
+      "currentTask": {
+        "name": "currentTask",
+        "t": "String",
+        "initializer": {
+          "type": "ecs.raptorian.LiteralNode",
+          "value": "ожидание"
+        }
+      }
+    },
+    "parameters": [
+      {
+        "name": "name",
+        "type": "String",
+        "token_type": "val"
+      }
+    ],
+    "inheritances": [
+      {
+        "name": "Agent"
+      }
+    ]
+  },
+  "A": {
+    "name": "A",
+    "methods": {
+      "s": {
+        "name": "s",
+        "parameters": [],
+        "body": {}
+      }
+    },
+    "methods_call": [],
+    "member_variables": {},
+    "parameters": [],
+    "inheritances": []
+  },
+  "MainRn": {
+    "name": "MainRn",
+    "methods": {
+      "main": {
+        "name": "main",
+        "parameters": [],
+        "body": {
+          "statements": [
+            {
+              "type": "ecs.raptorian.NewVarNode",
+              "name": "robot1",
+              "t": null,
+              "initializer": {
+                "type": "ecs.raptorian.FunctionCallNode",
+                "name": "Robot",
+                "arguments": [
+                  {
+                    "type": "ecs.raptorian.LiteralNode",
+                    "value": "Робот 1"
+                  }
+                ]
+              }
+            },
+            {
+              "type": "ecs.raptorian.NewVarNode",
+              "name": "robot2",
+              "t": null,
+              "initializer": {
+                "type": "ecs.raptorian.FunctionCallNode",
+                "name": "Robot",
+                "arguments": [
+                  {
+                    "type": "ecs.raptorian.LiteralNode",
+                    "value": "Робот 2"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "start": {
+        "name": "start",
+        "parameters": [],
+        "body": {
+          "statements": [
+            {
+              "type": "ecs.raptorian.NewVarNode",
+              "name": "a",
+              "t": null,
+              "initializer": {
+                "type": "ecs.raptorian.FunctionCallNode",
+                "name": "A",
+                "arguments": []
+              }
+            }
+          ]
+        }
+      }
+    },
+    "methods_call": [],
+    "member_variables": {},
+    "parameters": []
+  }
+}
