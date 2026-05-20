@@ -2,8 +2,8 @@ import java.security.MessageDigest
 
 plugins {
     id("java-library")
-    kotlin("jvm") version "2.1.0"
-    kotlin("plugin.serialization") version "2.1.0"
+    kotlin("jvm") version "2.3.21"
+    alias(libs.plugins.kotlin.serialization)
     `maven-publish`
     signing
 }
@@ -26,7 +26,7 @@ kotlin {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation(libs.kotlinx.serialization.json)
 }
 
 publishing {
