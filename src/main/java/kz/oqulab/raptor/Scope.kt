@@ -32,11 +32,34 @@ class Scope(val parent: Scope? = null) {
             declaredType = declaredType ?: getDeclaredType(key),
             isMutable = isMutable
         )
-        variables[key] = info
+        assign(key, value, declaredType, isMutable)
     }
 
     fun containsKey(key: String): Boolean {
         return variables.containsKey(key) || (parent?.containsKey(key) == true)
+    }
+
+    fun assign(key: String, value: Any?, declaredType: TypeNode? = null, isMutable: Boolean = true) {
+        if (variables.containsKey(key)) {
+            // Переменная объявлена именно в ЭТОМ скоупе — обновляем здесь
+            val oldInfo = variables[key]!!
+            variables[key] = oldInfo.copy(value = value,
+                declaredType = declaredType ?: getDeclaredType(key),
+                isMutable = isMutable)
+
+        } else if (parent != null) {
+            // Переменной здесь нет — идём искать в родителя
+            parent.assign(key, value)
+
+        } else {
+            variables[key] = VariableInfo(
+                value = value,
+                declaredType = declaredType ?: getDeclaredType(key),
+                isMutable = isMutable
+            )
+            // Дошли до самого верхнего скоупа и не нашли
+//            throw InterpreterException("Cannot assign to undeclared variable '$key'")
+        }
     }
 
     fun clear() = variables.clear()

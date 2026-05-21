@@ -15,6 +15,7 @@ abstract class RaptorInterpreter(
 ) {
     protected var currentScope: Scope = Scope.empty()   // теперь один current, а не список
     protected var returnEncountered = false
+    protected var returnValue: Any? = null
     protected var breakEncountered = false
     protected val variables = mutableMapOf<String, Any?>()
 
@@ -63,8 +64,11 @@ abstract class RaptorInterpreter(
                 }
                 is MapNode -> node.pairs.mapKeys { executeNode(it.key) }.mapValues { executeNode(it.value) }
                 is ReturnNode -> {
+                    returnValue = executeNode(node.value)
                     returnEncountered = true
-                    executeNode(node.value)
+
+                    println("RAPTOR: ReturnNode, returnValue=$returnValue")
+                    returnValue
                 }
                 is BreakStatementNode -> {
                     breakEncountered = true
@@ -133,6 +137,7 @@ abstract class RaptorInterpreter(
     suspend fun executeIfNode(node: IfNode): Any? {
         val conditionResult = node.condition?.let { evaluateCondition(it) } ?: false
 
+        println("---RAPTOR: RI executeIfNode, conditionResult=$conditionResult, left=${executeNode((node.condition as? BinaryExpressionNode)?.left)}, right=${executeNode((node.condition as? BinaryExpressionNode)?.right)}")
         when {
             conditionResult -> return executeBlock(node.thenBranch)
             node.branches.isNotEmpty() -> {
@@ -199,9 +204,11 @@ abstract class RaptorInterpreter(
                 var lastResult: Any? = null
                 for (statement in node.statements) {
                     lastResult = executeNode(statement)
+                    println("RAPTOR:executeFunBlock lastResult=$lastResult, returnValue=$returnValue")
                     if (returnEncountered) {
                         returnEncountered = false  // Сброс флага для будущего использования
-                        break  // Прерывание выполнения блока при обнаружении return
+                        return returnValue.also { returnValue = null }
+                        // Прерывание выполнения блока при обнаружении return
                     }
                 }
                 lastResult
@@ -219,7 +226,7 @@ abstract class RaptorInterpreter(
         when {
             node.instance != null -> {
                 val instance = executeNode(node.instance)
-                println("instance: $instance, ${instance is JsonPrimitive}")
+                println("RI:executeFunctionCallNode instance: $instance, ${instance is JsonPrimitive}")
                 when(instance) {
                     is ClassInstance -> {
                         val evaluatedArguments = node.arguments.mapNotNull {
@@ -445,14 +452,12 @@ abstract class RaptorInterpreter(
                                                 val old = (executeNode(node.arguments[0]) as? JsonPrimitive)?.getString()
                                                 val new = (executeNode(node.arguments[1]) as? JsonPrimitive)?.getString()
                                                 if(old != null && new != null) {
-                                                    println("replace:2: old=$old, new=$new, ignoreCase=false, ins=${value}, rep=${value.replace(old, new)}")
                                                     result = JsonPrimitive(value.replace(old, new))
                                                 } else throw IllegalArgumentException("Both 'old' and 'new' parameters must be non-null in replace() method. 'old' was ${old?.let { "not null" } ?: "null"}, 'new' was ${new?.let { "not null" } ?: "null"}.")
                                             } else if(node.arguments.size == 3) {
                                                 val old = (executeNode(node.arguments[0]) as? JsonPrimitive)?.getString()
                                                 val new = (executeNode(node.arguments[1]) as? JsonPrimitive)?.getString()
                                                 val ignoreCase = (executeNode(node.arguments[2]) as? JsonPrimitive)?.booleanOrNull ?: false
-                                                println("replace:3: old=$old, new=$new, ignoreCase=$ignoreCase")
                                                 if(old != null && new != null) {
                                                     result = JsonPrimitive(value.replace(old, new, ignoreCase))
                                                 } else throw IllegalArgumentException("Both 'old' and 'new' parameters must be non-null in replace() method. 'old' was ${old?.let { "not null" } ?: "null"}, 'new' was ${new?.let { "not null" } ?: "null"}.")
@@ -482,7 +487,6 @@ abstract class RaptorInterpreter(
                                                 if (startIndex < 0 || startIndex > value.length) {
                                                     throw IllegalArgumentException("The 'startIndex' parameter in substring() must be within the range of the string's length. Provided 'startIndex' was $startIndex, but it must be between 0 and ${value.length}.")
                                                 } else {
-                                                    println("substring:1: startIndex=$startIndex, value=$value, substring=${value.substring(startIndex)}")
                                                     result = JsonPrimitive(value.substring(startIndex))
                                                 }
                                             } else if(node.arguments.size == 2) {
@@ -491,7 +495,6 @@ abstract class RaptorInterpreter(
                                                 if (startIndex < 0 || endIndex > value.length || startIndex > endIndex) {
                                                     throw IllegalArgumentException("Invalid 'startIndex' or 'endIndex' parameters in substring(). 'startIndex' should be >= 0, 'endIndex' should be <= string length, and 'startIndex' should be <= 'endIndex'. Provided: startIndex = $startIndex, endIndex = $endIndex, string length = ${value.length}.")
                                                 } else {
-                                                    println("substring:2: startIndex=$startIndex,endIndex=$endIndex, value=$value, substring=${value.substring(startIndex, endIndex)}")
                                                     result = JsonPrimitive(value.substring(startIndex, endIndex))
                                                 }
                                             }
@@ -665,12 +668,18 @@ abstract class RaptorInterpreter(
         return false
     }
 
-    suspend fun executeWhileNode(node: WhileNode): Any? {
+    suspend fun executeWhileNode(node: WhileNode) {
         newVarStack()
         var c = 0
-        while (evaluateCondition(node.condition)) {
-//        while (evaluateCondition(node.condition)) {
+        while (evaluateCondition(node.condition) && c < 10) {
             executeNode(node.body)
+            println("RAPTOR: executeWhileNode c=$c ")
+
+            // Проверка наличия флага return
+            if (returnEncountered) {
+                removeLastVarStack()
+                return // Прерывание цикла при обнаружении return
+            }
             if(breakEncountered) {
                 breakEncountered = false
                 break
@@ -678,7 +687,7 @@ abstract class RaptorInterpreter(
             c++
         }
         removeLastVarStack()
-        return null // Циклы while обычно не возвращают значение
+        return // Циклы while обычно не возвращают значение
     }
     private suspend fun executeForLoop(node: ForLoopNode) {
         newVarStack()
@@ -693,13 +702,17 @@ abstract class RaptorInterpreter(
 
                 // Проверка наличия флага return
                 if (returnEncountered) {
-                    returnEncountered = false
+                    removeLastVarStack()
                     return  // Прерывание цикла при обнаружении return
                 }
                 if(breakEncountered) {
                     breakEncountered = false
-                    return
+                    break
                 }
+            }
+            if (returnEncountered) {
+                removeLastVarStack()
+                return  // Прерывание цикла при обнаружении return
             }
 
             // Выполнение инкремента
@@ -726,13 +739,17 @@ abstract class RaptorInterpreter(
 
                     // Проверка наличия флага return
                     if (returnEncountered) {
-                        returnEncountered = false
+                        removeLastVarStack()
                         return  // Прерывание цикла при обнаружении return
                     }
                     if(breakEncountered) {
                         breakEncountered = false
                         return
                     }
+                }
+                if (returnEncountered) {
+                    removeLastVarStack()
+                    return  // Прерывание цикла при обнаружении return
                 }
             }
         } else {
@@ -750,13 +767,17 @@ abstract class RaptorInterpreter(
 
                     // Проверка наличия флага return
                     if (returnEncountered) {
-                        returnEncountered = false
+                        removeLastVarStack()
                         return  // Прерывание цикла при обнаружении return
                     }
                     if(breakEncountered) {
                         breakEncountered = false
                         return
                     }
+                }
+                if (returnEncountered) {
+                    removeLastVarStack()
+                    return  // Прерывание цикла при обнаружении return
                 }
             }
         }
@@ -784,20 +805,30 @@ abstract class RaptorInterpreter(
             // Set the loop variable to the current value
             node.variable as VariableNode
             setValue(node.variable.name, JsonPrimitive(i))
-
+            println("---RAPTOR: RI executeForRangeNode, FIRST --------------------, i=$i")
             // Execute the loop body
             for (statement in node.body) {
                 executeNode(statement)
 
+                println("-----RAPTOR: RI executeForRangeNode, SECOND returnEncountered=$returnEncountered")
                 // Проверка наличия флага return
                 if (returnEncountered) {
-                    returnEncountered = false
+//                    returnEncountered = false
+                    removeLastVarStack()
                     return  // Прерывание цикла при обнаружении return
                 }
                 if(breakEncountered) {
-                    breakEncountered = false
+//                    breakEncountered = false
                     return
                 }
+            }
+            if (returnEncountered) {
+                removeLastVarStack()
+                return  // Прерывание цикла при обнаружении return
+            }
+            if(breakEncountered) {
+                breakEncountered = false
+                return
             }
         }
         removeLastVarStack()
@@ -814,7 +845,10 @@ abstract class RaptorInterpreter(
 
             val newValue = when (node.token.value) {
                 "-" -> negate(currentValue)
-                "++" -> incrementDecrement(currentValue, 1, node.isPrefix)
+                "++" -> {
+                    println("RAPTOR:executeUnaryExpression targetInstance=$targetInstance, currentValue=$currentValue")
+                    incrementDecrement(currentValue, 1, node.isPrefix)
+                }
                 "--" -> incrementDecrement(currentValue, -1, node.isPrefix)
                 "!" -> if (currentValue.isBoolean()) JsonPrimitive(!currentValue.boolean) else throw IllegalArgumentException("Logical negation applied to non-boolean type")
                 else -> throw UnsupportedOperationException("Unsupported unary operator: ${node.token.value}")
@@ -824,6 +858,7 @@ abstract class RaptorInterpreter(
         } else {
             val operand = executeNode(node.operand) ?: throw IllegalArgumentException("UnaryExpression '${node.token.value}' applied to null type")
             val mo = node.operand
+            println("RAPTOR:executeUnaryExpression1 mo=$mo, operand=$operand, if=${mo is VariableNode}")
             if(mo is VariableNode) {
                 val newValue = when (node.token.value) {
                     "-" -> {
@@ -832,8 +867,17 @@ abstract class RaptorInterpreter(
                         }
                         negate(operand)
                     }
-                    "++" -> incrementDecrement(operand, 1, node.isPrefix)
-                    "--" -> incrementDecrement(operand, -1, node.isPrefix)
+                    "++" -> {
+                        val a = incrementDecrement(operand, 1, node.isPrefix)
+                        println("RAPTOR:executeUnaryExpression1 ++ a=$a")
+                        a
+                    }
+                    "--" -> {
+
+                       val a = incrementDecrement(operand, -1, node.isPrefix)
+                        println("RAPTOR:executeUnaryExpression1 -- a=$a")
+                        a
+                    }
                     "!" -> {
                         if (operand !is JsonPrimitive) {
                             throw IllegalArgumentException("UnaryExpression '${node.token.value}' applied to non-Primitive type, operand=${operand.getValueType()}")
@@ -842,6 +886,7 @@ abstract class RaptorInterpreter(
                     }
                     else -> throw UnsupportedOperationException("Unsupported unary operator: ${node.token.value}")
                 }
+                println("RAPTOR:executeUnaryExpression1 setValue var=${mo.name}, newValue=$newValue")
                 setValue(mo.name, newValue, false)
                 return if (node.isPrefix) newValue else operand
             } else  if(mo is LiteralNode) {
