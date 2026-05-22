@@ -6,4 +6,3 @@ out
 !gradle/wrapper/gradle-wrapper.jar
 .DS_Store
 secret.asc
-.kotlin
