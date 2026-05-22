@@ -25,6 +25,7 @@ class ExecutionContext(
     override fun setValue(key: String, value: Any?, newVar: Boolean, isMutable: Boolean) {
         if (value == null) return
 
+        println("RAPTOR:EC:setValue key=$key, value=$value, newVar=$newVar")
         if (!newVar && currentScope.isImmutable(key)) {
             throw InterpreterException(
                 message = "Val cannot be reassigned: '$key' is immutable",
@@ -41,7 +42,7 @@ class ExecutionContext(
         if (newVar) {
             currentScope.set(key, value, declaredType, isMutable)
         } else {
-            currentScope.set(key, value)
+            currentScope.assign(key, value)
         }
     }
 

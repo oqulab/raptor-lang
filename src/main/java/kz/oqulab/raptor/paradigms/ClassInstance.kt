@@ -72,6 +72,7 @@ class ClassInstance(
     override fun setValue(key: String, value: Any?, newVar: Boolean, isMutable: Boolean) {
         if (value == null) return
 
+        println("RAPTOR:CI:setValue key=$key, value=$value, newVar=$newVar")
         if (value is ClassInstance) {
             classesInstance[key] = value
             return
@@ -96,7 +97,7 @@ class ClassInstance(
             currentScope.set(key, value, declaredType, isMutable)
         } else {
             if (currentScope.containsKey(key)) {
-                currentScope.set(key, value)
+                currentScope.assign(key, value)
             } else {
                 fields[key] = value
             }
