@@ -4,6 +4,8 @@
 
 Raptor is a Kotlin-like scripting language designed for learning and embedding. It supports both English and Cyrillic (Kazakh/Russian) keywords, making programming accessible regardless of native language.
 
+[📖 Read the Docs](https://oqulab.github.io/raptor-lang/)
+
 ## Features
 
 - **Full Lexer** — tokenizes source code into 60+ token types
