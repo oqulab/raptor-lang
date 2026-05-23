@@ -1,15 +1,8 @@
 package kz.oqulab.raptor
 
 import kz.oqulab.raptor.paradigms.ClassInstance
-import kz.oqulab.raptor.utls.RaptorJson.mJson
-import kz.oqulab.raptor.utls.asNumber
 import kz.oqulab.raptor.utls.getString
-import kz.oqulab.raptor.utls.isBoolean
-import kz.oqulab.raptor.utls.isDouble
-import kz.oqulab.raptor.utls.isInt
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import kz.oqulab.raptor.utls.isString
 import kotlin.time.measureTime
 
 class ExecutionContext(
@@ -18,8 +11,6 @@ class ExecutionContext(
 ) : RaptorInterpreter(log = log, readInput = readInput) {
 
     var classes: Map<String, ClassNode> = mutableMapOf()
-    val functions = mutableListOf<MethodNode>()
-
 
     override fun getValue(key: String): Any? = super.getValue(key) ?: variables[key]
     override fun setValue(key: String, value: Any?, newVar: Boolean, isMutable: Boolean) {
@@ -48,7 +39,7 @@ class ExecutionContext(
 
     override fun findFunction(name: String): MethodNode? {
         classes.values.forEach { it.methods[name]?.let { return it } }
-        return functions.find { it.name == name }
+        return methods.find { it.name == name }
     }
 
     override fun findClass(name: String): ClassNode? = classes[name]
@@ -66,7 +57,7 @@ class ExecutionContext(
         }
         log(JsonPrimitive("[system] execution time: $workTime ms"), true)
 
-        functions.clear()
+        methods.clear()
         super.resetState()
         variables.clear()
         returnEncountered = false
@@ -113,7 +104,7 @@ class ExecutionContext(
     override fun resetState() {
         super.resetState()
         classes = mutableMapOf()
-        functions.clear()
+        methods.clear()
         variables.clear()
         returnEncountered = false
     }

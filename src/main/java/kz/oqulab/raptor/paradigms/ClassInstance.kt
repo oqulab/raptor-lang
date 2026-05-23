@@ -1,51 +1,14 @@
 package kz.oqulab.raptor.paradigms
 
 import kz.oqulab.raptor.utls.RaptorJson.mJson
-import kz.oqulab.raptor.utls.asNumber
-import kz.oqulab.raptor.utls.getString
-import kz.oqulab.raptor.utls.getValueType
-import kz.oqulab.raptor.utls.isBoolean
-import kz.oqulab.raptor.utls.isDouble
-import kz.oqulab.raptor.utls.isInt
-import kz.oqulab.raptor.utls.isNumber
 import kz.oqulab.raptor.utls.toJson
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
-import kz.oqulab.raptor.ASTNode
-import kz.oqulab.raptor.AssignmentNode
-import kz.oqulab.raptor.BinaryExpressionNode
-import kz.oqulab.raptor.BlockStatementNode
-import kz.oqulab.raptor.BreakStatementNode
-import kz.oqulab.raptor.CatchNode
 import kz.oqulab.raptor.ClassNode
-import kz.oqulab.raptor.CompoundAssignmentNode
-import kz.oqulab.raptor.ConcatenationNode
 import kz.oqulab.raptor.ExecutionContext
-import kz.oqulab.raptor.ForInNode
-import kz.oqulab.raptor.ForLoopNode
-import kz.oqulab.raptor.ForRangeNode
-import kz.oqulab.raptor.GroupingNode
-import kz.oqulab.raptor.IfNode
-import kz.oqulab.raptor.IndexAccessNode
 import kz.oqulab.raptor.InterpreterException
-import kz.oqulab.raptor.ListNode
-import kz.oqulab.raptor.LiteralNode
-import kz.oqulab.raptor.MapNode
-import kz.oqulab.raptor.MemberAccessNode
 import kz.oqulab.raptor.MethodCallNode
 import kz.oqulab.raptor.MethodNode
-import kz.oqulab.raptor.NewVarNode
 import kz.oqulab.raptor.RaptorInterpreter
-import kz.oqulab.raptor.ReturnNode
-import kz.oqulab.raptor.Token
-import kz.oqulab.raptor.TokenType
-import kz.oqulab.raptor.TryNode
-import kz.oqulab.raptor.UnaryExpressionNode
-import kz.oqulab.raptor.VariableNode
-import kz.oqulab.raptor.WhenNode
-import kz.oqulab.raptor.WhileNode
-import kotlin.collections.get
-import kotlin.text.iterator
 
 class ClassInstance(
     val classNode: ClassNode,
@@ -56,12 +19,14 @@ class ClassInstance(
     logParam: (JsonElement, Boolean) -> Unit = { _, _ -> }
 ) : RaptorInterpreter(log = logParam, executionContext = executionContext) {
 
+    override fun toString(): String {
+        return "${classNode.name}(${evaluatedArguments.joinToString { it.toString() }})"
+    }
     val THIS_VALUES = listOf("this", "бұл")
     val SUPER_VALUES = listOf("super", "үстем")
     val fields = mutableMapOf<String, Any?>()
     var classes: Map<String, ClassNode> = emptyMap()
     var classesInstance: MutableMap<String, ClassInstance> = mutableMapOf()
-    val functions = mutableListOf<MethodNode>()
 
     override fun getValue(key: String): Any? {
         if (key in THIS_VALUES) return this
@@ -104,7 +69,7 @@ class ClassInstance(
         }
     }
     override fun findFunction(name: String): MethodNode? =
-        functions.find { it.name == name } ?: classNode.methods[name] ?: parent?.findFunction(name)
+        methods.find { it.name == name } ?: classNode.methods[name] ?: parent?.findFunction(name)
 
     override fun findClass(name: String): ClassNode? =
         classes[name] ?: executionContext?.classes?.get(name) ?: parent?.findClass(name)

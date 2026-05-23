@@ -1,6 +1,7 @@
 package kz.oqulab.raptor
 
 import kz.oqulab.raptor.paradigms.ClassInstance
+import kz.oqulab.raptor.utls.RaptorJson
 
 class InterpreterException(
     message: String,
@@ -14,4 +15,4 @@ class InterpreterException(
 
 class RaptorException(
     val classInstance: ClassInstance? = null
-) : Exception("HaHa", null)
+) : Exception("$classInstance", null)

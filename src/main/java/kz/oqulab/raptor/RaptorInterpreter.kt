@@ -1,7 +1,5 @@
 package kz.oqulab.raptor
 
-import jdk.dynalink.linker.support.Guards.isInstance
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
 import kz.oqulab.raptor.paradigms.ClassInstance
 import kz.oqulab.raptor.utls.*
@@ -18,7 +16,9 @@ abstract class RaptorInterpreter(
     protected var returnValue: Any? = null
     protected var breakEncountered = false
     protected val variables = mutableMapOf<String, Any?>()
+    protected val methods = mutableListOf<MethodNode>()
 
+    fun getFunctions(): List<MethodNode> = methods
     // === АБСТРАКЦИИ (реализуются в наследниках) ===
     // getValue теперь можно сделать protected default-реализацией
     protected open fun getValue(key: String): Any? = currentScope.get(key)
@@ -97,7 +97,9 @@ abstract class RaptorInterpreter(
                 is ForInNode -> executeForInNode(node)
                 is UnaryExpressionNode -> executeUnaryExpression(node)
                 is GroupingNode -> executeNode(node.expression)
-                is MethodNode -> null
+                is MethodNode -> {
+                    methods.add(node)
+                }
                 is MemberAccessNode -> {
                     val instance = executeNode(node.instance)
                     when (instance) {
@@ -223,6 +225,7 @@ abstract class RaptorInterpreter(
         val classNode = findClass(node.name)
         val function = findFunction(node.name)
 
+        println("-----RAPTOR: RI executeFunctionCallNode,classNode=$classNode, function=$function")
         when {
             node.instance != null -> {
                 val instance = executeNode(node.instance)
@@ -613,6 +616,7 @@ abstract class RaptorInterpreter(
             "Type mismatch: inferred type is '${result?.getValueType()}', but 'Throwable' was expected.",
             line = node.line,
             column = node.column)
+        println("RAPTOR:executeThrowStatementNode result=$result")
         throw RaptorException(result)
     }
 

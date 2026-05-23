@@ -31,25 +31,8 @@ class ECParser(_tokens: List<Token> = listOf()) {
         val fields = mutableMapOf<String, NewVarNode>()
         val params = mutableListOf<ParamNode>()
 
-//        [
-//            bps.ClassNode,
-//            bps.ReturnNode,
-//            bps.BinaryExpressionNode,
-//            bps.VariableNode,
-//            bps.NewVar,
-//            bps.LiteralNode,
-//            bps.IfNode,
-//            bps.BlockStatementNode,
-//            bps.AssignmentNode,
-//            bps.FunctionCallNode,
-//            bps.TryNode,
-//            bps.WhileNode,
-//            bps.UnaryExpressionNode
-//        ]
         while (!isAtEnd()) {
-//            try {
             val s = parseStatement()
-//                println("Parser: parse, a=${isAtEnd()}, s=${s}, s=${s.toJson()}")
             s?.let {
                 when(s) {
                     is MethodNode -> {
@@ -73,31 +56,12 @@ class ECParser(_tokens: List<Token> = listOf()) {
                 }
 
             }
-//            } catch (e: Throwable) {
-//                println("Parser: parse, e=$e")
-//
-//            }
         }
 
         statements["MainRn"] = ClassNode("MainRn", methods, methodsCall, fields, params, token = previous())
         return statements
     }
 
-//    private fun parseVariableDeclaration(addValues: Boolean = true): NewVarNode {
-//        val name = consume(TokenType.IDENTIFIER, "Expected variable name").value
-//        var type: String? = null
-//        if (match(TokenType.COLON)) {
-//            type = consume(TokenType.IDENTIFIER, "Expected type after ':'.").value
-//        }
-//
-//        var initializer: ASTNode? = null
-//        if(addValues) {
-//            consume(TokenType.EQUAL, "Ожидается '=' после имени переменной")
-//            initializer = parseStatement()
-//        }
-////        println("parseVar: name=$name, type=$type, initializer=${initializer.toJson()}")
-//        return NewVarNode(name, type, initializer, previous())
-//    }
     private fun parseVariableDeclaration(addValues: Boolean = true): NewVarNode {
         val varType = previous()
         val nameToken = consume(TokenType.IDENTIFIER, "Expected variable name")
@@ -979,10 +943,11 @@ class ECParser(_tokens: List<Token> = listOf()) {
 
     private fun parseReturnStatement(): ReturnNode {
         val returnValue: ASTNode? = if (!isAtEnd()) {
-            parseExpression()  // Parse the expression to be returned
+            parseStatement() //parseExpression()  // Parse the expression to be returned
         } else {
             null  // No return value or end of line/block reached
         }
+        println("++++ RAPTOR: PARSER,parseReturnStatement returnValue=$returnValue")
         // Note: No need to consume a semicolon
         return ReturnNode(returnValue, previous())
     }
