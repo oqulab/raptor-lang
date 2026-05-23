@@ -82,11 +82,7 @@ abstract class RaptorInterpreter(
                 is CharNode -> node.value
                 is IfNode -> executeIfNode(node)
                 is WhenNode -> executeWhenNode(node)
-                is BlockStatementNode -> {
-                    var lastResult: Any? = null
-                    node.statements.forEach { lastResult = executeNode(it) }
-                    lastResult
-                }
+                is BlockStatementNode -> executeBlock(node)
                 is CompoundAssignmentNode -> executeCompoundAssignment(node)
                 is MethodCallNode -> executeFunctionCallNode(node)
                 is TryNode -> executeTryNode(node)
@@ -190,6 +186,7 @@ abstract class RaptorInterpreter(
                 var lastResult: Any? = null
                 for (statement in node.statements) {
                     lastResult = executeNode(statement)
+                    if (returnEncountered || breakEncountered) break
                 }
                 lastResult
             }
@@ -215,7 +212,14 @@ abstract class RaptorInterpreter(
                 }
                 lastResult
             }
-            else -> executeNode(node)
+            else -> {
+                val result = executeNode(node)
+                if (returnEncountered) {
+                    returnEncountered = false
+                    return returnValue.also { returnValue = null }
+                }
+                result
+            }
         }
     }
 
@@ -1486,6 +1490,11 @@ abstract class RaptorInterpreter(
     }
     open fun resetState() {
         currentScope = Scope.empty()
+        returnEncountered = false
+        breakEncountered = false
+        returnValue = null
+        variables.clear()
+        methods.clear()
     }
     fun getVariableType(value: Any?): String {
         return when {

@@ -27,12 +27,11 @@ class Scope(val parent: Scope? = null) {
     }
 
     fun set(key: String, value: Any?, declaredType: TypeNode? = null, isMutable: Boolean = true) {
-        val info = VariableInfo(
+        variables[key] = VariableInfo(
             value = value,
             declaredType = declaredType ?: getDeclaredType(key),
             isMutable = isMutable
         )
-        assign(key, value, declaredType, isMutable)
     }
 
     fun containsKey(key: String): Boolean {

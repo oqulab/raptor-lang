@@ -57,11 +57,7 @@ class ExecutionContext(
         }
         log(JsonPrimitive("[system] execution time: $workTime ms"), true)
 
-        methods.clear()
-        super.resetState()
-        variables.clear()
-        returnEncountered = false
-
+        resetState()
         return Pair(result, workTime.inWholeMilliseconds)
     }
 
@@ -104,8 +100,5 @@ class ExecutionContext(
     override fun resetState() {
         super.resetState()
         classes = mutableMapOf()
-        methods.clear()
-        variables.clear()
-        returnEncountered = false
     }
 }
