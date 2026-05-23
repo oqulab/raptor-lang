@@ -149,11 +149,12 @@ class ECParser(_tokens: List<Token> = listOf()) {
                     break // Assignment ends the chain
                 }
                 match(TokenType.PLUS_EQUAL, TokenType.MINUS_EQUAL, TokenType.STAR_EQUAL, TokenType.SLASH_EQUAL) -> {
+                    val token = previous()
                     if(expression is VariableNode) {
                         expression = MemberAccessNode(expression, name.value, previous())
                     }
                     val value = parseExpression()
-                    expression = CompoundAssignmentNode(expression, previous(), value)
+                    expression = CompoundAssignmentNode(expression, token, value)
                     break // Compound assignment ends the chain
                 }
                 match(TokenType.PLUS_PLUS, TokenType.MINUS_MINUS) -> {
@@ -454,8 +455,9 @@ class ECParser(_tokens: List<Token> = listOf()) {
                     TokenType.SLASH_EQUAL,
                     TokenType.PERCENT_EQUAL
                 ) -> {
+                    val token = previous()
                     val value = parseExpression() // Parse the value to be assigned
-                    expr = CompoundAssignmentNode(expr, previous(), value)
+                    expr = CompoundAssignmentNode(expr, token, value)
                 }
                 else -> {
                     // Exit the loop if no other expression constructs are matched
@@ -947,7 +949,6 @@ class ECParser(_tokens: List<Token> = listOf()) {
         } else {
             null  // No return value or end of line/block reached
         }
-        println("++++ RAPTOR: PARSER,parseReturnStatement returnValue=$returnValue")
         // Note: No need to consume a semicolon
         return ReturnNode(returnValue, previous())
     }

@@ -434,7 +434,7 @@ data class WhileNode(
 data class NewVarNode(
     @SerialName("name")
     val name: String,
-    @SerialName("type")
+    @SerialName("declared_type")
     val declaredType: TypeNode? = null,
     @SerialName("initializer")
     val initializer: ASTNode? = null,
@@ -736,12 +736,12 @@ data class AssignmentNode(
 data class CompoundAssignmentNode(
     @SerialName("target")
     val target: ASTNode,
-    @Transient
+    @SerialName("token")
     override val token: Token = Token(),
     @SerialName("value")
     val value: ASTNode
 ): ASTNode() {
-    val operator get() = token?.type ?: TokenType.UNKNOWN
+    val operator get() = token.type
 }
 
 @Serializable
@@ -805,7 +805,7 @@ data class UnaryExpressionNode(
 data class ParamNode(
     @SerialName("name")
     val name: String,
-    @SerialName("type")
+    @SerialName("declared_type")
     val declaredType: TypeNode = TypeNode.Simple("Any"),   // ← было String
     @SerialName("default_value")
     val defaultValue: ASTNode? = null,

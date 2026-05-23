@@ -1,5 +1,6 @@
 package kz.oqulab.raptor
 
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.*
 import kz.oqulab.raptor.paradigms.ClassInstance
 import kz.oqulab.raptor.utls.*
@@ -679,9 +680,10 @@ abstract class RaptorInterpreter(
     suspend fun executeWhileNode(node: WhileNode) {
         newVarStack()
         var c = 0
-        while (evaluateCondition(node.condition) && c < 10) {
+        while (evaluateCondition(node.condition)) {
+            println("RAPTOR RI: executeWhileNode, c=$c")
+            yield() // Позволяет отменить выполнение, если корутина была отменена
             executeNode(node.body)
-            println("RAPTOR: executeWhileNode c=$c ")
 
             // Проверка наличия флага return
             if (returnEncountered) {
@@ -695,15 +697,14 @@ abstract class RaptorInterpreter(
             c++
         }
         removeLastVarStack()
-        return // Циклы while обычно не возвращают значение
     }
     private suspend fun executeForLoop(node: ForLoopNode) {
         newVarStack()
         // Инициализация цикла
         executeNode(node.initializer)
 
-        var c = 0
-        while (evaluateCondition(node.condition) && c < 10000) {
+        while (evaluateCondition(node.condition)) {
+            yield()
             // Выполнение тела цикла
             for (statement in node.body) {
                 executeNode(statement)
@@ -725,7 +726,6 @@ abstract class RaptorInterpreter(
 
             // Выполнение инкремента
             executeNode(node.increment)
-            c++
         }
         removeLastVarStack()
     }
@@ -737,6 +737,7 @@ abstract class RaptorInterpreter(
             val iterableValue = iterable.getString()
 
             for (element in iterableValue) {
+                yield()
                 // Set the loop variable to the current element
                 node.variable as VariableNode
                 setValue(node.variable.name, element.toString())
@@ -765,6 +766,7 @@ abstract class RaptorInterpreter(
                 ?: throw RuntimeException("The right-hand side of 'in' must be an iterable object")
 
             for (element in iterableValue) {
+                yield()
                 // Set the loop variable to the current element
                 node.variable as VariableNode
                 setValue(node.variable.name, element)
@@ -810,6 +812,7 @@ abstract class RaptorInterpreter(
         }
 
         for (i in range) {
+            yield()
             // Set the loop variable to the current value
             node.variable as VariableNode
             setValue(node.variable.name, JsonPrimitive(i))
@@ -957,37 +960,47 @@ abstract class RaptorInterpreter(
     }
 
     private suspend fun evaluateBinaryExpression(node: BinaryExpressionNode): Any {
-        val left = executeNode(node.left)
-        val right = executeNode(node.right)
-
         return when (node.token.value) {
-            // Логические операторы — отдельная обработка!
-            "&&", "||" -> evaluateLogicalOperator(left, right, node.token)
-
+            "&&" -> {
+                val left = executeNode(node.left)
+                if (!toBoolean(left)) JsonPrimitive(false)
+                else JsonPrimitive(toBoolean(executeNode(node.right)))
+            }
+            "||" -> {
+                val left = executeNode(node.left)
+                if (toBoolean(left)) JsonPrimitive(true)
+                else JsonPrimitive(toBoolean(executeNode(node.right)))
+            }
             // Сравнения
-            "==", "!=", "<", ">", "<=", ">=" -> evaluateComparisonOperator(left, right, node.token)
-
+            "==", "!=", "<", ">", "<=", ">=" -> {
+                val left = executeNode(node.left)
+                val right = executeNode(node.right)
+                evaluateComparisonOperator(left, right, node.token)
+            }
             // Арифметика
-            "+", "-", "*", "/", "%" -> evaluateArithmeticOperator(left, right, node.token)
-
+            "+", "-", "*", "/", "%" -> {
+                val left = executeNode(node.left)
+                val right = executeNode(node.right)
+                evaluateArithmeticOperator(left, right, node.token)
+            }
             else -> throw UnsupportedOperationException("Unsupported binary operator: ${node.token}")
         }
     }
+
+    private fun toBoolean(value: Any?): Boolean {
+        return when (value) {
+            is Boolean -> value
+            is JsonPrimitive -> value.booleanOrNull ?: (value.intOrNull != 0) ?: (value.contentOrNull != null && value.isString)
+            else -> value != null
+        }
+    }
+
     /**
-     * Правильная обработка логических операторов && и ||
+     * Правильная обработка логических операторов && и || (больше не используется напрямую из evaluateBinaryExpression, но оставлена для совместимости если нужно)
      */
     private fun evaluateLogicalOperator(a: Any?, b: Any?, operator: Token): JsonElement {
-        val aBool = when (a) {
-            is Boolean -> a
-            is JsonPrimitive -> a.booleanOrNull ?: (a.intOrNull != 0) ?: false
-            else -> false
-        }
-
-        val bBool = when (b) {
-            is Boolean -> b
-            is JsonPrimitive -> b.booleanOrNull ?: (b.intOrNull != 0) ?: false
-            else -> false
-        }
+        val aBool = toBoolean(a)
+        val bBool = toBoolean(b)
 
         val result = when (operator.value) {
             "&&" -> aBool && bBool
@@ -1417,7 +1430,10 @@ abstract class RaptorInterpreter(
                 Token("%", TokenType.PERCENT)
             )
             // Add more cases for other compound assignment operators
-            else -> throw UnsupportedOperationException("Unsupported compound assignment operator: ${node.operator}")
+            else -> {
+                println("RAPTOR:executeCompoundAssignment node=${RaptorJson.mJson.encodeToString(node)}")
+                throw UnsupportedOperationException("Unsupported compound assignment operator: ${node.operator}")
+            }
         }
 
         // The target should be a VariableNode if it's a simple assignment
@@ -1429,8 +1445,7 @@ abstract class RaptorInterpreter(
             }
             is MemberAccessNode -> {
                 // If the target is a MemberAccessNode, we need to update the property of an object.
-                // Assuming MemberAccessNode has 'instance' and 'memberName'.
-                val instance = (node.target.instance as? ClassInstance)
+                val instance = (executeNode(node.target.instance) as? ClassInstance)
                     ?: throw IllegalStateException("Target instance is not a ClassInstance.")
                 instance.setValue(node.target.memberName, result)
             }
