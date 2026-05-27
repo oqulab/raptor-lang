@@ -2,6 +2,7 @@ package kz.oqulab.raptor
 
 import kz.oqulab.raptor.paradigms.ClassInstance
 import kz.oqulab.raptor.utls.getString
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.*
 import kotlin.time.measureTime
 
@@ -51,6 +52,7 @@ class ExecutionContext(
             try {
                 result = initClass("MainRn", "main")
             } catch (e: Exception) {
+                if (e is CancellationException) throw e
                 result = listOf(JsonPrimitive("Error: $e"))
                 log(JsonPrimitive("[system] error: $e"), true)
             }

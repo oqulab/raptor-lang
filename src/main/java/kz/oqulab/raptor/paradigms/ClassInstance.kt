@@ -37,7 +37,6 @@ class ClassInstance(
     override fun setValue(key: String, value: Any?, newVar: Boolean, isMutable: Boolean) {
         if (value == null) return
 
-        println("RAPTOR:CI:setValue key=$key, value=$value, newVar=$newVar")
         if (value is ClassInstance) {
             classesInstance[key] = value
             return
@@ -117,8 +116,6 @@ class ClassInstance(
         methodNode?.let {
             result += executeNode(MethodCallNode(runMethodName, listOf()))
         }
-
-        val newVariableStack = HashMap<String, JsonElement?>()
 
         // Связывание аргументов с параметрами функции
         classNode.parameters.forEachIndexed { index, parameter ->

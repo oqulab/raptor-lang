@@ -1,5 +1,6 @@
 package kz.oqulab.raptor
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.*
 import kz.oqulab.raptor.paradigms.ClassInstance
@@ -32,6 +33,7 @@ abstract class RaptorInterpreter(
 
     // === ЕДИНЫЙ executeNode (эталон из ClassInstance) ===
     suspend fun executeNode(node: ASTNode?): Any? {
+        yield() // Проверка на отмену корутины на каждом шаге интерпретации
         return try {
             when (node) {
                 is AssignmentNode -> {
@@ -114,6 +116,7 @@ abstract class RaptorInterpreter(
         } catch (e: RaptorException) {
             throw e
         } catch (e: Exception) {
+            if (e is CancellationException) throw e
             val (line, col) = getPosition(node)
             throw InterpreterException(
                 message = e.message ?: e.toString(),
@@ -857,7 +860,6 @@ abstract class RaptorInterpreter(
             val newValue = when (node.token.value) {
                 "-" -> negate(currentValue)
                 "++" -> {
-                    println("RAPTOR:executeUnaryExpression targetInstance=$targetInstance, currentValue=$currentValue")
                     incrementDecrement(currentValue, 1, node.isPrefix)
                 }
                 "--" -> incrementDecrement(currentValue, -1, node.isPrefix)
@@ -869,7 +871,6 @@ abstract class RaptorInterpreter(
         } else {
             val operand = executeNode(node.operand) ?: throw IllegalArgumentException("UnaryExpression '${node.token.value}' applied to null type")
             val mo = node.operand
-            println("RAPTOR:executeUnaryExpression1 mo=$mo, operand=$operand, if=${mo is VariableNode}")
             if(mo is VariableNode) {
                 val newValue = when (node.token.value) {
                     "-" -> {
@@ -879,15 +880,10 @@ abstract class RaptorInterpreter(
                         negate(operand)
                     }
                     "++" -> {
-                        val a = incrementDecrement(operand, 1, node.isPrefix)
-                        println("RAPTOR:executeUnaryExpression1 ++ a=$a")
-                        a
+                        incrementDecrement(operand, 1, node.isPrefix)
                     }
                     "--" -> {
-
-                       val a = incrementDecrement(operand, -1, node.isPrefix)
-                        println("RAPTOR:executeUnaryExpression1 -- a=$a")
-                        a
+                        incrementDecrement(operand, -1, node.isPrefix)
                     }
                     "!" -> {
                         if (operand !is JsonPrimitive) {
@@ -897,7 +893,6 @@ abstract class RaptorInterpreter(
                     }
                     else -> throw UnsupportedOperationException("Unsupported unary operator: ${node.token.value}")
                 }
-                println("RAPTOR:executeUnaryExpression1 setValue var=${mo.name}, newValue=$newValue")
                 setValue(mo.name, newValue, false)
                 return if (node.isPrefix) newValue else operand
             } else  if(mo is LiteralNode) {
