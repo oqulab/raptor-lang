@@ -489,7 +489,7 @@ class ECParser(_tokens: List<Token> = listOf()) {
         //println("parseMultiplicativeExpression: expr=$expr, peek=${peek().value}, prev=${previous().value}")
         while (match(TokenType.STAR, TokenType.SLASH)) {
             val operator = previous()
-            val right = parsePrimary()
+            val right = parseUnaryExpression()
             expr = BinaryExpressionNode(expr, operator, right)
         }
 
