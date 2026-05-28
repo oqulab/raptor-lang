@@ -57,7 +57,7 @@ class ExecutionContext(
                 log(JsonPrimitive("[system] error: $e"), true)
             }
         }
-        log(JsonPrimitive("[system] execution time: $workTime ms"), true)
+        log(JsonPrimitive("[system] execution time: ${workTime.inWholeMilliseconds} ms"), true)
 
         resetState()
         return Pair(result, workTime.inWholeMilliseconds)

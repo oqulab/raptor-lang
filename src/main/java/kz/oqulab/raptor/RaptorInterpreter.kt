@@ -1,7 +1,9 @@
 package kz.oqulab.raptor
 
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.yield
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.json.*
 import kz.oqulab.raptor.paradigms.ClassInstance
 import kz.oqulab.raptor.utls.*
@@ -33,7 +35,6 @@ abstract class RaptorInterpreter(
 
     // === ЕДИНЫЙ executeNode (эталон из ClassInstance) ===
     suspend fun executeNode(node: ASTNode?): Any? {
-        yield() // Проверка на отмену корутины на каждом шаге интерпретации
         return try {
             when (node) {
                 is AssignmentNode -> {
@@ -70,7 +71,6 @@ abstract class RaptorInterpreter(
                     returnValue = executeNode(node.value)
                     returnEncountered = true
 
-                    println("RAPTOR: ReturnNode, returnValue=$returnValue")
                     returnValue
                 }
                 is BreakStatementNode -> {
@@ -107,7 +107,6 @@ abstract class RaptorInterpreter(
                     }
                 }
                 else -> {
-                    println("Unsupported node type: ${node?.let { mJson.encodeToString(it) }}")
                     null
                 }
             }
@@ -139,7 +138,6 @@ abstract class RaptorInterpreter(
     suspend fun executeIfNode(node: IfNode): Any? {
         val conditionResult = node.condition?.let { evaluateCondition(it) } ?: false
 
-        println("---RAPTOR: RI executeIfNode, conditionResult=$conditionResult, left=${executeNode((node.condition as? BinaryExpressionNode)?.left)}, right=${executeNode((node.condition as? BinaryExpressionNode)?.right)}")
         when {
             conditionResult -> return executeBlock(node.thenBranch)
             node.branches.isNotEmpty() -> {
@@ -207,7 +205,6 @@ abstract class RaptorInterpreter(
                 var lastResult: Any? = null
                 for (statement in node.statements) {
                     lastResult = executeNode(statement)
-                    println("RAPTOR:executeFunBlock lastResult=$lastResult, returnValue=$returnValue")
                     if (returnEncountered) {
                         returnEncountered = false  // Сброс флага для будущего использования
                         return returnValue.also { returnValue = null }
@@ -233,11 +230,9 @@ abstract class RaptorInterpreter(
         val classNode = findClass(node.name)
         val function = findFunction(node.name)
 
-        println("-----RAPTOR: RI executeFunctionCallNode,classNode=$classNode, function=$function")
         when {
             node.instance != null -> {
                 val instance = executeNode(node.instance)
-                println("RI:executeFunctionCallNode instance: $instance, ${instance is JsonPrimitive}")
                 when(instance) {
                     is ClassInstance -> {
                         val evaluatedArguments = node.arguments.mapNotNull {
@@ -624,7 +619,6 @@ abstract class RaptorInterpreter(
             "Type mismatch: inferred type is '${result?.getValueType()}', but 'Throwable' was expected.",
             line = node.line,
             column = node.column)
-        println("RAPTOR:executeThrowStatementNode result=$result")
         throw RaptorException(result)
     }
 
@@ -654,10 +648,6 @@ abstract class RaptorInterpreter(
     }
 
     private fun isExceptionMatch(exception: Throwable, exceptionType: String): Boolean {
-        // Базовые типы — ловят всё
-//        if (exceptionType == "Any") return true
-//        if (exceptionType == "Exception" || exceptionType == "Throwable") return true
-
         // 1. RaptorException — несёт classNode с Raptor-классом исключения
         if (exception is RaptorException && exception.classInstance != null) {
             val thrownClass = exception.classInstance
@@ -669,183 +659,165 @@ abstract class RaptorInterpreter(
             }
         }
 
-//        // 2. InterpreterException — ошибки рантайма интерпретатора
-//        if (exception is InterpreterException) {
-//            if (exceptionType == "InterpreterException" || exceptionType == "RuntimeException") return true
-//        }
-//
-//        // 3. Стандартные ошибки JVM
-//        if (exception is RuntimeException && exceptionType == "RuntimeException") return true
-
         return false
     }
 
     suspend fun executeWhileNode(node: WhileNode) {
         newVarStack()
-        var c = 0
-        while (evaluateCondition(node.condition)) {
-            println("RAPTOR RI: executeWhileNode, c=$c")
-            yield() // Позволяет отменить выполнение, если корутина была отменена
-            executeNode(node.body)
+        try {
+            while (currentCoroutineContext().isActive && evaluateCondition(node.condition)) {
+                executeNode(node.body)
 
-            // Проверка наличия флага return
-            if (returnEncountered) {
-                removeLastVarStack()
-                return // Прерывание цикла при обнаружении return
+                if (returnEncountered) return
+                if(breakEncountered) {
+                    breakEncountered = false
+                    return
+                }
             }
-            if(breakEncountered) {
-                breakEncountered = false
-                break
-            }
-            c++
+        } finally {
+            removeLastVarStack()
         }
-        removeLastVarStack()
     }
     private suspend fun executeForLoop(node: ForLoopNode) {
         newVarStack()
         // Инициализация цикла
         executeNode(node.initializer)
 
-        while (evaluateCondition(node.condition)) {
-            yield()
-            // Выполнение тела цикла
-            for (statement in node.body) {
-                executeNode(statement)
+        try {
+            while (currentCoroutineContext().isActive && evaluateCondition(node.condition)) {
+                // Выполнение тела цикла
+                for (statement in node.body) {
+                    executeNode(statement)
 
-                // Проверка наличия флага return
-                if (returnEncountered) {
-                    removeLastVarStack()
-                    return  // Прерывание цикла при обнаружении return
+                    // Проверка наличия флага return
+                    if (returnEncountered) return
+                    if(breakEncountered) {
+                        breakEncountered = false
+                        return
+                    }
                 }
+                if (returnEncountered) return
+                if(breakEncountered) {
+                    breakEncountered = false
+                    break
+                }
+
+                // Выполнение инкремента
+                executeNode(node.increment)
+            }
+        } finally {
+            removeLastVarStack()
+        }
+    }
+
+    private suspend fun executeForInNode(node: ForInNode) {
+        newVarStack()
+
+        try {
+            val iterable = executeNode(node.iterable)
+            if(iterable is JsonPrimitive && iterable.isString) {
+                val iterableValue = iterable.getString()
+
+                for (element in iterableValue) {
+                    currentCoroutineContext().ensureActive()
+                    // Set the loop variable to the current element
+                    node.variable as VariableNode
+                    setValue(node.variable.name, element.toString())
+
+                    // Execute the loop body
+                    for (statement in node.body) {
+                        executeNode(statement)
+
+                        // Проверка наличия флага return
+                        if (returnEncountered) return
+                        if(breakEncountered) {
+                            breakEncountered = false
+                            return
+                        }
+                    }
+                    if (returnEncountered) return
+                    if(breakEncountered) {
+                        breakEncountered = false
+                        break
+                    }
+                }
+            } else {
+                val iterableValue = iterable as? Iterable<*>
+                    ?: throw RuntimeException("The right-hand side of 'in' must be an iterable object")
+
+                for (element in iterableValue) {
+                    currentCoroutineContext().ensureActive()
+                    // Set the loop variable to the current element
+                    node.variable as VariableNode
+                    setValue(node.variable.name, element)
+
+                    // Execute the loop body
+                    for (statement in node.body) {
+                        executeNode(statement)
+
+                        // Проверка наличия флага return
+                        if (returnEncountered)  return
+                        if(breakEncountered) {
+                            breakEncountered = false
+                            return
+                        }
+                    }
+                    if (returnEncountered)  return
+                    if(breakEncountered) {
+                        breakEncountered = false
+                        break
+                    }
+                }
+            }
+        } finally {
+            removeLastVarStack()
+        }
+    }
+    private suspend fun executeForRangeNode(node: ForRangeNode) {
+        newVarStack()
+
+        try {
+            val startValue = executeNode(node.range.start) as? JsonElement
+                ?: throw RuntimeException("Range start value must be a number")
+            val endValue = executeNode(node.range.end) as? JsonElement
+                ?: throw RuntimeException("Range end value must be a number")
+
+            if(!startValue.isInt()) throw RuntimeException("Range start value must be a number")
+            if(!endValue.isInt()) throw RuntimeException("Range end value must be a number")
+
+            val a1 = startValue.jsonPrimitive.intOrNull ?: 0
+            val b1 = endValue.jsonPrimitive.intOrNull ?: 0
+            val range = if (node.range.inclusive) {
+                a1..b1
+            } else {
+                a1 until b1
+            }
+
+            for (i in range) {
+                currentCoroutineContext().ensureActive()
+                // Set the loop variable to the current value
+                node.variable as VariableNode
+                setValue(node.variable.name, JsonPrimitive(i))
+                // Execute the loop body
+                for (statement in node.body) {
+                    executeNode(statement)
+
+                    // Проверка наличия флага return
+                    if (returnEncountered) return
+                    if(breakEncountered) {
+                        breakEncountered = false
+                        return
+                    }
+                }
+                if (returnEncountered) return
                 if(breakEncountered) {
                     breakEncountered = false
                     break
                 }
             }
-            if (returnEncountered) {
-                removeLastVarStack()
-                return  // Прерывание цикла при обнаружении return
-            }
-
-            // Выполнение инкремента
-            executeNode(node.increment)
+        } finally {
+            removeLastVarStack()
         }
-        removeLastVarStack()
-    }
-
-    private suspend fun executeForInNode(node: ForInNode) {
-        newVarStack()
-        val iterable = executeNode(node.iterable)
-        if(iterable is JsonPrimitive && iterable.isString) {
-            val iterableValue = iterable.getString()
-
-            for (element in iterableValue) {
-                yield()
-                // Set the loop variable to the current element
-                node.variable as VariableNode
-                setValue(node.variable.name, element.toString())
-
-                // Execute the loop body
-                for (statement in node.body) {
-                    executeNode(statement)
-
-                    // Проверка наличия флага return
-                    if (returnEncountered) {
-                        removeLastVarStack()
-                        return  // Прерывание цикла при обнаружении return
-                    }
-                    if(breakEncountered) {
-                        breakEncountered = false
-                        return
-                    }
-                }
-                if (returnEncountered) {
-                    removeLastVarStack()
-                    return  // Прерывание цикла при обнаружении return
-                }
-            }
-        } else {
-            val iterableValue = iterable as? Iterable<*>
-                ?: throw RuntimeException("The right-hand side of 'in' must be an iterable object")
-
-            for (element in iterableValue) {
-                yield()
-                // Set the loop variable to the current element
-                node.variable as VariableNode
-                setValue(node.variable.name, element)
-
-                // Execute the loop body
-                for (statement in node.body) {
-                    executeNode(statement)
-
-                    // Проверка наличия флага return
-                    if (returnEncountered) {
-                        removeLastVarStack()
-                        return  // Прерывание цикла при обнаружении return
-                    }
-                    if(breakEncountered) {
-                        breakEncountered = false
-                        return
-                    }
-                }
-                if (returnEncountered) {
-                    removeLastVarStack()
-                    return  // Прерывание цикла при обнаружении return
-                }
-            }
-        }
-        removeLastVarStack()
-    }
-    private suspend fun executeForRangeNode(node: ForRangeNode) {
-        newVarStack()
-        val startValue = executeNode(node.range.start) as? JsonElement
-            ?: throw RuntimeException("Range start value must be a number")
-        val endValue = executeNode(node.range.end) as? JsonElement
-            ?: throw RuntimeException("Range end value must be a number")
-
-        if(!startValue.isInt()) throw RuntimeException("Range start value must be a number")
-        if(!endValue.isInt()) throw RuntimeException("Range end value must be a number")
-
-        val a1 = startValue.jsonPrimitive.intOrNull ?: 0
-        val b1 = endValue.jsonPrimitive.intOrNull ?: 0
-        val range = if (node.range.inclusive) {
-            a1..b1
-        } else {
-            a1 until b1
-        }
-
-        for (i in range) {
-            yield()
-            // Set the loop variable to the current value
-            node.variable as VariableNode
-            setValue(node.variable.name, JsonPrimitive(i))
-            println("---RAPTOR: RI executeForRangeNode, FIRST --------------------, i=$i")
-            // Execute the loop body
-            for (statement in node.body) {
-                executeNode(statement)
-
-                println("-----RAPTOR: RI executeForRangeNode, SECOND returnEncountered=$returnEncountered")
-                // Проверка наличия флага return
-                if (returnEncountered) {
-//                    returnEncountered = false
-                    removeLastVarStack()
-                    return  // Прерывание цикла при обнаружении return
-                }
-                if(breakEncountered) {
-//                    breakEncountered = false
-                    return
-                }
-            }
-            if (returnEncountered) {
-                removeLastVarStack()
-                return  // Прерывание цикла при обнаружении return
-            }
-            if(breakEncountered) {
-                breakEncountered = false
-                return
-            }
-        }
-        removeLastVarStack()
     }
 
     suspend fun executeUnaryExpression(node: UnaryExpressionNode): Any {
@@ -1426,7 +1398,6 @@ abstract class RaptorInterpreter(
             )
             // Add more cases for other compound assignment operators
             else -> {
-                println("RAPTOR:executeCompoundAssignment node=${RaptorJson.mJson.encodeToString(node)}")
                 throw UnsupportedOperationException("Unsupported compound assignment operator: ${node.operator}")
             }
         }
